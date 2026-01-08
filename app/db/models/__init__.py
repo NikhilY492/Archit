@@ -12,3 +12,4 @@ from app.db.models.component_instance import ComponentInstance
 from app.db.models.master_material import MasterMaterial
 from app.db.models.boq_snapshot import BOQSnapshot
 from app.db.models.rate_version import RateVersion
+from app.db.models.invoice import Invoice

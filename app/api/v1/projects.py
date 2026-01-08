@@ -1,8 +1,21 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from uuid import UUID
+
+from app.api.deps import get_db
 from app.db.models.project import Project
 from app.db.models.boq_snapshot import BOQSnapshot
+from app.db.models.invoice import Invoice
+from app.core.project_finance_engine import compute_project_financials
 
-@router.post("/projects/{project_id}/approve")
-def approve_project(project_id: UUID, db: Session = Depends(get_db)):
+router = APIRouter()
+
+
+@router.get("/projects/{project_id}/financials")
+def project_financial_summary(
+    project_id: UUID,
+    db: Session = Depends(get_db)
+):
     project = (
         db.query(Project)
         .filter(Project.id == project_id)
@@ -12,23 +25,22 @@ def approve_project(project_id: UUID, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.status != "sent":
-        raise HTTPException(
-            status_code=400,
-            detail="Project not ready for approval"
-        )
-
-    # Lock all snapshots
     snapshots = (
         db.query(BOQSnapshot)
-        .filter(BOQSnapshot.project_id == project_id)
+        .filter(
+            BOQSnapshot.project_id == project_id,
+            BOQSnapshot.is_locked == True
+        )
         .all()
     )
 
-    for snap in snapshots:
-        snap.is_locked = True
+    invoices = (
+        db.query(Invoice)
+        .filter(Invoice.project_id == project_id)
+        .all()
+    )
 
-    project.status = "approved"
-    db.commit()
-
-    return {"message": "Project approved and pricing locked"}
+    return compute_project_financials(
+        snapshots=snapshots,
+        invoices=invoices
+    )
